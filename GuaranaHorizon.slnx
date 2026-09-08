@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="GuaranaHorizon/GuaranaHorizon.vcxproj" Id="022096b6-2222-49f5-b80e-6ee62c886900" />
+</Solution>
