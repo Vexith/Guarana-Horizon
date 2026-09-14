@@ -2,20 +2,13 @@
 #define AIRCRAFT_H
 
 #include "vector.h"
+#include "input.h"
 
 typedef struct {
 	Vec3 forward;
 	Vec3 right;
 	Vec3 up;
 } AircraftBasis;
-
-typedef struct {
-	float pitch;
-	float yaw;
-	float roll;
-	
-	float throttle;
-} AircraftUpdate;
 
 typedef struct {
 	Vec3 position;
@@ -41,6 +34,7 @@ typedef struct {
 
 void aircraft_init(Aircraft* aircraft);
 void update_aircraft(Aircraft* aircraft, float dt);
+void apply_input(Aircraft* aircraft, const AircraftInput* input, float dt);
 
 AircraftBasis get_basis(const Aircraft* aircraft);
 

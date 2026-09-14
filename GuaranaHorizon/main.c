@@ -1,25 +1,44 @@
 #include <stdio.h>
+#include <SDL3/SDL.h>
+
 #include "aircraft.h"
 #include "input.h"
+#include "renderer.h"
 
 int main(void) {
 	Aircraft aircraft;
 	AircraftInput input;
+	SDL_Event event;
 
+	bool running = true;
 	const float dt = 1.0f / 60.0f;
 
 	aircraft_init(&aircraft);
 	input_init(&input);
-	
-	input.throttle = 1.0f;
 
-	for (int frame = 0; frame < 600; frame++) {
-		update_aircraft(&aircraft, dt);
-		if (frame % 60 == 0) {
-			printf("Time: %.1f s\n", frame *dt);
-			printf("Position: X %.2f | Y %.2f | Z %.2f\n",aircraft.position.x, aircraft.position.y, aircraft.position.z);
-			printf("Velocity: X %.2f |  Y %.2f | Z: %.2f\n", aircraft.velocity.x, aircraft.velocity.y, aircraft.velocity.z);
-			printf("Rotation: X %.2f |  Y %.2f | Z: %.2f\n", aircraft.rotation.x, aircraft.rotation.y, aircraft.rotation.z);
-		}
+	if (!renderer_init()) {
+		printf("Failed to intiliaze SDL3.\n");
+		return 1;
 	}
+
+	while (running) {
+
+		while (SDL_PollEvent(&event)) {
+			if (event.type == SDL_EVENT_QUIT) {
+				running = false;
+			}
+			input_update(&input, &event);
+		}
+		
+		apply_input(&aircraft, &input, dt);
+		update_aircraft(&aircraft, dt);
+
+		clear_renderer();
+		ddraw(&aircraft);
+		renderer_present();
+		SDL_Delay(16);
+	}
+	shutdown();
+
+	return 0;
 }

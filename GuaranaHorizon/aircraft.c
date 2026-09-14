@@ -30,6 +30,8 @@
 #define STALL_LIFT 0.35f
 
 #define INDUCED_DRAG 0.0000000001f
+#define THROTTLE_RATE 0.25f
+#define CONTROL_RESPONSE 8.0f
 
 static float clamp_float(float value, float minimum, float maximum) {
 	if (value < minimum) { return minimum; }
@@ -100,7 +102,16 @@ AircraftBasis get_basis(const Aircraft* aircraft) {
 
 	return basis;
 }
+void apply_input(Aircraft* aircraft, const AircraftInput* input, float dt) {
+	if (aircraft == 0 || input == 0) return;
 
+	ANGULAR.x += (input->pitch * PITCH_AUTH - ANGULAR.x) * CONTROL_RESPONSE * dt;
+	ANGULAR.y += (input->yaw * YAW_AUTH - ANGULAR.y) * CONTROL_RESPONSE * dt;
+	ANGULAR.z += (input->roll * ROLL_AUTH - ANGULAR.z) * CONTROL_RESPONSE * dt;
+
+	THROTTLE += input->throttle * THROTTLE_RATE * dt;
+	THROTTLE = clamp_float(THROTTLE, 0.0f, 1.0f);
+}
 void update_aircraft(Aircraft* aircraft, float dt){
 	AircraftBasis basis;
 
