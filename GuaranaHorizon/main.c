@@ -4,16 +4,19 @@
 #include "aircraft.h"
 #include "input.h"
 #include "renderer.h"
+#include "camera.h"
 
 int main(void) {
 	Aircraft aircraft;
-	AircraftInput input;
+	//AircraftInput input;
 	SDL_Event event;
+	Camera camera;
 
 	bool running = true;
 	const float dt = 1.0f / 60.0f;
 
 	aircraft_init(&aircraft);
+	AircraftInput input;
 	input_init(&input);
 
 	if (!renderer_init()) {
@@ -22,19 +25,24 @@ int main(void) {
 	}
 
 	while (running) {
-
+		
 		while (SDL_PollEvent(&event)) {
 			if (event.type == SDL_EVENT_QUIT) {
 				running = false;
 			}
 			input_update(&input, &event);
 		}
-		
+		camera_init(&camera);
+
 		apply_input(&aircraft, &input, dt);
-		update_aircraft(&aircraft, dt);
+		update_aircraft(&aircraft, &input,dt);
+
+		follow_plane(&camera, &aircraft, dt);
 
 		clear_renderer();
-		ddraw(&aircraft);
+		draw_ground_grid(&camera);
+		draw_cube(&aircraft, &camera);
+		//ddraw(&aircraft);
 		renderer_present();
 		SDL_Delay(16);
 	}

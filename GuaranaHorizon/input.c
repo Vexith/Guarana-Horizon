@@ -27,10 +27,10 @@ void input_update(AircraftInput* input, const SDL_Event* event) {
 		case SDLK_D:
 			input->yaw = 1.0f;
 			break;
-		case SDLK_Q:
+		case SDLK_E:
 			input->roll = -1.0f;
 			break;
-		case SDLK_E:
+		case SDLK_Q:
 			input->roll = 1.0f;
 			break;
 		case SDLK_R:

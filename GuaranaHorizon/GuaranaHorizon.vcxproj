@@ -146,14 +146,20 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="aircraft.c" />
+    <ClCompile Include="camera.c" />
     <ClCompile Include="input.c" />
     <ClCompile Include="main.c" />
+    <ClCompile Include="model.c" />
+    <ClCompile Include="quaternion.c" />
     <ClCompile Include="renderer.c" />
     <ClCompile Include="vector.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="aircraft.h" />
+    <ClInclude Include="camera.h" />
     <ClInclude Include="input.h" />
+    <ClInclude Include="model.h" />
+    <ClInclude Include="quaternion.h" />
     <ClInclude Include="renderer.h" />
     <ClInclude Include="vector.h" />
   </ItemGroup>

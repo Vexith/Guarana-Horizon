@@ -3,6 +3,7 @@
 
 #include "vector.h"
 #include "input.h"
+#include "quaternion.h"
 
 typedef struct {
 	Vec3 forward;
@@ -18,7 +19,7 @@ typedef struct {
 	Vec3 angular_velocity;
 	Vec3 center_of_mass; // center of mass relative to the aircraft origin
 	
-	
+	Quaternion orientation;
 	float mass;
 	float wing_area;
 	float lift_coefficient;
@@ -29,11 +30,22 @@ typedef struct {
 	float yaw_authority;
 	float roll_authority;
 
+	float input_pitch;
+	float input_yaw;
+	float input_roll;
+
 	float throttle;
+	float inertia_x;
+	float inertia_y;
+	float inertia_z;
+
+	float pitch_torq;
+	float yaw_torq;
+	float roll_torq;
 } Aircraft;
 
 void aircraft_init(Aircraft* aircraft);
-void update_aircraft(Aircraft* aircraft, float dt);
+void update_aircraft(Aircraft* aircraft, const AircraftInput* input, float dt);
 void apply_input(Aircraft* aircraft, const AircraftInput* input, float dt);
 
 AircraftBasis get_basis(const Aircraft* aircraft);
