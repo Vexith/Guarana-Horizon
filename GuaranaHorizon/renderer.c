@@ -124,7 +124,7 @@ void draw_ground_grid(const Camera* cam) {
 		SDL_RenderLine(renderer, x1, y1, x2, y2);
 	}
 }
-void draw_cube(const Aircraft* aircraft, const Camera* camera) {
+void draw_airplane(const Aircraft* aircraft, const Camera* camera) {
 	if (aircraft == 0 || camera == 0) return;
 	
 	AircraftBasis basis = get_basis(aircraft);
@@ -197,41 +197,4 @@ int project_point(const Camera* camera, Vec3 point, float* screen_x, float* scre
 	*screen_y = HEIGHT * 0.5f - (cam_space.y * focal_length / cam_space.z) * (HEIGHT * 0.5f);
 	
 	return 1;
-}
-void ddraw(const Aircraft* aircraft) {
-	if (aircraft == NULL) return;
-
-	float center_x = WIDTH * 0.5f;
-	float center_y = HEIGHT * 0.5f;
-
-	float size = 40.0f;
-
-	float pitch = aircraft->rotation.x;
-	float yaw = aircraft->rotation.y;
-	float roll = aircraft->rotation.z;
-
-	float nose_x = sinf(yaw) * size;
-	float nose_y = -sinf(pitch) * size;
-
-	float wing_x = cosf(roll) * size * 0.6f;
-	float wing_y = sinf(roll) * size * 0.6f;
-
-	SDL_FPoint nose;
-	SDL_FPoint left;
-	SDL_FPoint right;
-
-	nose.x = center_x + nose_x;
-	nose.y = center_y + nose_y;
-
-	left.x = center_x - wing_x;
-	left.y = center_y - wing_y;
-
-	right.x = center_x + wing_x;
-	right.y = center_y + wing_y;
-
-	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-
-	SDL_RenderLine(renderer, nose.x, nose.y, left.x, left.y);
-	SDL_RenderLine(renderer, left.x, left.y, right.x, right.y);
-	SDL_RenderLine(renderer, right.x, right.y, nose.x, nose.y);
 }

@@ -13,6 +13,6 @@ void renderer_present(void);
 
 void ddraw(const Aircraft* aircraft);
 int project_point(const Camera* camera, Vec3 point, float* screen_x, float* screen_y);
-void draw_cube(const Aircraft* aircraft, const Camera* camera);
+void draw_airplane(const Aircraft* aircraft, const Camera* camera);
 
 #endif

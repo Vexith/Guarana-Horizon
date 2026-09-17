@@ -9,11 +9,16 @@ typedef struct {
 	Vec3 rotation;
 	Vec3 target;
 	Vec3 up;
+	Vec3 smoothed_forward;
+	Vec3 smoothed_up;
+
+
 
 	float fov;
 	float fov_base;
 	float near_plane;
 	float far_plane;
+	
 	bool initialized;
 } Camera;
 

@@ -41,8 +41,8 @@ int main(void) {
 
 		clear_renderer();
 		draw_ground_grid(&camera);
-		draw_cube(&aircraft, &camera);
-		//ddraw(&aircraft);
+		draw_airplane(&aircraft, &camera);
+		
 		renderer_present();
 		SDL_Delay(16);
 	}
