@@ -1,55 +1,103 @@
 #ifndef AIRCRAFT_H
 #define AIRCRAFT_H
 
+#include <math.h>
+#include "quaternion.h"
 #include "vector.h"
 #include "input.h"
-#include "quaternion.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct {
-	Vec3 forward;
-	Vec3 right;
-	Vec3 up;
+	Vec3 forward, right, up;
 } AircraftBasis;
 
 typedef struct {
 	Vec3 position;
-	Vec3 velocity;
-
-	Vec3 rotation; // euler rotation in radians
-	Vec3 angular_velocity;
-	Vec3 center_of_mass; // center of mass relative to the aircraft origin
-	
 	Quaternion orientation;
-	float mass;
-	float wing_area;
-	float lift_coefficient;
-	float drag_coefficient;
-	float engine_thrust;
+	Vec3 velocity;
+	Vec3 angular_velocity;
 
-	float pitch_authority;
-	float yaw_authority;
-	float roll_authority;
+	float gamma;
+	float theta;
+	float phi;
 
-	float input_pitch;
-	float input_yaw;
-	float input_roll;
+	float thrust;
+	float elevatoreffect;
+	float rolleffect;
+	float ruddereffect;
+	float FlapsLevel;
+	int UndercarriageLevel;
+	int SpeedBrakeLevel;
+	float recthrust;
 
-	float throttle;
-	float inertia_x;
-	float inertia_y;
-	float inertia_z;
+	float accx, accy, accz;
+	float forcex, forcey, forcez;
+	float realspeed;
+	float DragEffect;
 
-	float pitch_torq;
-	float yaw_torq;
-	float roll_torq;
+	float maxthrust;
+	float manoeverability;
+	float RollRate;
+	float maxgamma;
+	float maxtheta;
+	float inertia;
+	float deadweight;
+	float StaticDrag;
+	float StallSpeed;
+	float DiveSpeedLimit1;
+	float DiveSpeedStructuralLimit;
+	float SeaLevelSpeedLimitThreshold;
+	float CompressibilitySpeed;
+	float CompressibilitySpeedWithSpeedBrakes;
+	float MaxFullPowerAltRatio;
+	float ServiceCeilingAltitude;
+	float SpeedBrakePower;
+	float ClipDistance;
+	float BlackoutSensitivity;
+	float RedoutSensitivity;
+
+	float FlapSpeed;
+	float FlapsLevelElevatorEffect0;
+	float FlapsLevelElevatorEffect1;
+	float FlapsLevelElevatorEffect2;
+	float FlapsLevelElevatorEffect3;
+	float FlapsLevelElevatorEffect4;
+
+	int OnTheGround;
+	int WepCapable;
+
+	float SpeedHistoryArray[10];
+	int SpeedHistoryIdx;
+	float InertiaTimer;
+	float InertiallyDampenedPlayerSpeed;
+
+	float AirDensityDrag;
+	float GammaDrag;
+	float LoopedBeyondVerticalDrag;
+	float SpeedBeyondStructuralLimitsDrag;
+	float FlapDrag;
+	float UndercarriageDrag;
+	float SpeedBrakeDrag;
+	float RegulatedForceX;
+	float RegulatedForceY;
+	float RegulatedForceZ;
 } Aircraft;
 
-void aircraft_init(Aircraft* aircraft);
-void update_aircraft(Aircraft* aircraft, const AircraftInput* input, float dt);
-void apply_input(Aircraft* aircraft, const AircraftInput* input, float dt);
+void aircraft_init(Aircraft* a);
+void aircraft_update(Aircraft* a, const AircraftInput* in);
+AircraftBasis get_basis(const Aircraft* a, Vec3* fwd, Vec3* rgt, Vec3* up);
+void get_euler(const Aircraft* a, float* gamma, float* theta, float* phi);
 
-AircraftBasis get_basis(const Aircraft* aircraft);
-
-float speed(const Aircraft* aircraft);
-float altitude(const Aircraft* aircraft);
-#endif
+void set_model(Aircraft* a,
+	float maxthrust, float manoeverability, float RollRate,
+	float maxgamma, float maxtheta, float inertia,
+	float deadweight, float StaticDrag,
+	float StallSpeed, float DiveSpeedLimit1, float DiveSpeedStructuralLimit,
+	float SeaLevelSpeedLimitThreshold,
+	float CompressibilitySpeed, float CompressibilitySpeedWithSpeedBrakes,
+	float MaxFullPowerAltRatio, float ServiceCeilingAltitude,
+	float FlapSpeed, float SpeedBrakePower);
+#endif 

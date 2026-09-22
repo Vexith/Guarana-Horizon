@@ -4,7 +4,14 @@
 #include <SDL3/SDL.h>
 
 typedef struct {
-	float pitch, yaw, roll, throttle;
+	float elevator;
+	float ailerion;
+	float rudder;
+	float thrust;
+	float FlapsLevel;
+	int UndercarriageLevel;
+	int SpeedBrakeLevel;
+	float timefac;
 } AircraftInput;
 
 void input_init(AircraftInput* input);

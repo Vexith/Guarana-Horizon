@@ -20,4 +20,7 @@ float length_squared(Vec3 v);
 
 Vec3 normalize(Vec3 v);
 Vec3 cross(Vec3 a, Vec3 b);
+
+float clampf(float v, float lo, float hi);
+
 #endif

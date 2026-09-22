@@ -18,29 +18,33 @@ int main(void) {
 	aircraft_init(&aircraft);
 	AircraftInput input;
 	input_init(&input);
+	input.thrust = aircraft.maxthrust * 0.7f;
 
 	if (!renderer_init()) {
 		printf("Failed to intiliaze SDL3.\n");
 		return 1;
 	}
-
+	camera_init(&camera);
 	while (running) {
-		
+		float mouse_dx = 0.0f, mouse_dy = 0.0f;
 		while (SDL_PollEvent(&event)) {
 			if (event.type == SDL_EVENT_QUIT) {
 				running = false;
 			}
+			if (event.type == SDL_EVENT_MOUSE_MOTION) {
+				mouse_dx += event.motion.xrel;
+				mouse_dy += event.motion.yrel;
+			}
 			input_update(&input, &event);
 		}
-		camera_init(&camera);
+		
+		aircraft_update(&aircraft, &input);
 
-		apply_input(&aircraft, &input, dt);
-		update_aircraft(&aircraft, &input,dt);
-
-		follow_plane(&camera, &aircraft, dt);
+		follow_plane(&camera, &aircraft, dt, mouse_dx, mouse_dy);
 
 		clear_renderer();
-		draw_ground_grid(&camera);
+		draw_ground(&camera, aircraft.position);
+		//draw_ground_grid(&camera);
 		draw_airplane(&aircraft, &camera);
 		
 		renderer_present();

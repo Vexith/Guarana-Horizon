@@ -1,321 +1,365 @@
 #include "aircraft.h"
-#include <math.h>
-#include <stdio.h>
 #include "quaternion.h"
+#include "vector.h"
 #include "input.h"
 
-#define AIR_DENSITY 1.225f
-#define GRAVITY 9.80665f
+#include <string.h>
 
-#define ANGULAR_DAMPING 2.0f
-#define EPSILON 0.00000001f
+#define D2R 0.017453f
+#define R2D 57.295779513f
+#define EPS 1e-8f
+#define M_PI 3.14f
 
-#define LIFT_SLOPE 4.5f
-#define MAX_ADA 0.35f
-#define STALL_ADA 0.26f
-#define STALL_LIFT 0.35f
+void aircraft_init(Aircraft* a) {
+	if (!a) return;
+	memset(a, 0, sizeof(*a));
 
-#define INDUCED_DRAG 0.0000000001f
-#define THROTTLE_RATE 0.25f
-#define CONTROL_RESPONSE 8.0f
-#define PITCH_STAB 2.5f
-#define YAW_STAB 1.5f
-#define ROLL_STAB 1.2f
-
-#define PITCH_TORQ 5000.0f
-#define YAW_TORQ 2500.0f
-#define ROLL_TORQ 8000.0f
-
-#define WING_SPAN 11.0f
-#define MEAN_CHORD 1.65f
-
-#define CM_ALPHA 4.0f
-#define CM_Q -15.0f
-#define CN_BETA 0.3f
-#define CN_R (-0.5f)
-#define CL_BETA (-0.10f)
-#define CL_P (-0.8f)
-
-#define CM_ELEVATOR 0.30f
-#define CN_RUDDER 0.15f
-#define CL_AILERON 0.06f
-#define INPUT_RAMP_TIME 1.2f
-
-
-static float clamp_float(float value, float minimum, float maximum) {
-	if (value < minimum) { return minimum; }
-	if (value > maximum) { return maximum; }
-	return value;
-}
-
-
-
-void aircraft_init(Aircraft* aircraft) {
-	if (aircraft == 0) return; 
-
-	aircraft->inertia_x = 3000.0f;
-	aircraft->inertia_y = 3500.0f;
-	aircraft->inertia_z = 5000.0f;
-
-	aircraft->pitch_torq = 800.0f;
-	aircraft->yaw_torq = 400.0f;
-	aircraft->roll_torq = 1200.0f;
-
-	aircraft->orientation = q_identity();
-	aircraft->position = (Vec3){ 0.0f, 100.0f, 0.0f };
-	aircraft->velocity = (Vec3){ 0.0f, 0.0f, 70.0f };
-	(aircraft)->rotation = (Vec3){ 0.0f, 0.0f, 0.0f };
-
-	aircraft->input_pitch = 0.0f;
-	aircraft->input_yaw = 0.0f;
-	aircraft->input_roll = 0.0f;
-
-	(aircraft)->angular_velocity = zero();
-	(aircraft)->center_of_mass = zero();
+	a->position = (Vec3){ 0.0f, 30.0f, 0.0f };
+	a->velocity = zero();
+	a->angular_velocity = zero();
 	
-	(aircraft)->mass = 1200.0f; // 1200kg aircraft
-	(aircraft)->wing_area = 18.0f; // 18 m^2 wing area
-
-	(aircraft)->lift_coefficient = 0.35f;
-	(aircraft)->drag_coefficient = 0.035f;
-
-	(aircraft)->engine_thrust = 15000.0f; // maximum engine thrust in newtons
-
-	(aircraft)->throttle = 0.65f;
-}
-
-AircraftBasis get_basis(const Aircraft* aircraft) {
-	AircraftBasis basis;
-
-	if (aircraft == 0) {
-		basis.forward = (Vec3){ 0.0f, 0.0f, 1.0f };
-		basis.right = (Vec3){ 1.0f, 0.0f, 0.0f };
-		basis.up = (Vec3){ 0.0f, 1.0f, 0.0f };
-		return basis;
-	}
-	basis.forward = q_rotatevec(aircraft->orientation, (Vec3) { 0.0f, 0.0f, 1.0f });
-	basis.right = q_rotatevec(aircraft->orientation, (Vec3) { 1.0f, 0.0f, 0.0f });
-	basis.up = q_rotatevec(aircraft->orientation, (Vec3) { 0.0f, 1.0f, 0.0f });
-
-	return basis;
-}
-void apply_input(Aircraft* aircraft, const AircraftInput* input, float dt) {
-	if (aircraft == 0 || input == 0) return;
-
-	(aircraft)->throttle += input->throttle * THROTTLE_RATE * dt;
-	(aircraft)->throttle = clamp_float((aircraft)->throttle, 0.0f, 1.0f);
-}
-void update_aircraft(Aircraft* aircraft,const AircraftInput* input, float dt){
-	if (aircraft == 0) return; // sanity checking
-	if (dt <= 0.0f) return;
-	AircraftBasis basis;
+	a->orientation = q_from_axangle((Vec3) { 0.0f, 1.0f, 0.0f }, (float)M_PI);
 	
+	a->gamma = 180.0f;
+	a->theta = 0.0f;
+	a->phi = 0.0f;
 
-	Vec3 side_forcevec, velocity_direction, total_force, thrust_force, lift_force, drag_force, gravity_force;
-	Vec3 angular_momentum;
-	Vec3 gyroscopic, lift_direction;
+	a->thrust = 0.0f;
+	a->recthrust = 0.0f;
 
-	
-	float speed = 0.0f;
-	float forward_speed = 0.0f;
-	float vertical_speed = 0.0f;
-	float lateral_speed = 0.0f;
-	
-	float angle_of_attack = 0.0f;
-	float sideslip_angle = 0.0f;
+	a->realspeed = 0.3f;
+	a->DragEffect = 1.0f;
 
-	float dynamic_pressure = 0.0f;
-	float lift = 0.0f;
-	float drag = 0.0f;
-	float side_force = 0.0f;
+	a->maxthrust = 1.5f;
+	a->manoeverability = 0.15f;
+	a->RollRate = 0.55f;
+	a->maxgamma = 25.0f;
+	a->maxtheta = 90.0f;
+	a->inertia = 2.5f;
+	a->deadweight = 0.13f;
+	a->StallSpeed = 0.13f;
+	a->DiveSpeedLimit1 = 0.35f;
+	a->DiveSpeedStructuralLimit = 0.45f;
+	a->SeaLevelSpeedLimitThreshold = 0.36f;
+	a->CompressibilitySpeed = 0.3f;
+	a->CompressibilitySpeedWithSpeedBrakes = 0.31f;
+	a->MaxFullPowerAltRatio = 0.68f;
+	a->ServiceCeilingAltitude = 1760.0f;
+	a->SpeedBrakePower = 1.0f;
+	a->ClipDistance = 0.03f;
 
-	float effective_lift_co = 0.0f;
-	float induced_drag = 0.0f;
-	float stall_factor = 0.0f;
-	float acceleration;
+	a->AirDensityDrag = 1.0f;
+	a->GammaDrag = 1.0f;
+	a->LoopedBeyondVerticalDrag = 1.0f;
+	a->SpeedBeyondStructuralLimitsDrag = 1.0f;
+	a->FlapDrag = 1.0f;
+	a->UndercarriageDrag = 1.0f;
+	a->SpeedBrakeDrag = 1.0f;
 
-	float pitch_mom = 0.0f;
-	float yaw_mom = 0.0f;
-	float roll_mom = 0.0f;
+	a->SpeedHistoryIdx = 0;
+	a->InertiallyDampenedPlayerSpeed = 0.30f;
 
-
-
-	basis = get_basis(aircraft);
-	speed = length(aircraft->velocity);
-
-	if (!isfinite(speed)) {
-		printf("FATAL ERROR: speed became invalid\n");
+	a->OnTheGround = 0;
+	a->WepCapable = 1;
+}
+void set_model(Aircraft* a, float maxthrust, float manoeverability, float RollRate,
+	float maxgamma, float maxtheta, float inertia,
+	float deadweight, float StaticDrag,
+	float StallSpeed, float DiveSpeedLimit1, float DiveSpeedStructuralLimit,
+	float SeaLevelSpeedLimitThreshold,
+	float CompressibilitySpeed, float CompressibilitySpeedWithSpeedBrakes,
+	float MaxFullPowerAltRatio, float ServiceCeilingAltitude,
+	float FlapSpeed, float SpeedBrakePower) {
+	if (!a) return;
+	a->maxthrust = maxthrust;
+	a->manoeverability = manoeverability;
+	a->RollRate = RollRate;
+	a->maxgamma = maxgamma;
+	a->maxtheta = maxtheta;
+	a->inertia = inertia;
+	a->deadweight = deadweight;
+	a->StaticDrag = StaticDrag;
+	a->StallSpeed = StallSpeed;
+	a->DiveSpeedLimit1 = DiveSpeedLimit1;
+	a->DiveSpeedStructuralLimit = DiveSpeedStructuralLimit;
+	a->SeaLevelSpeedLimitThreshold = SeaLevelSpeedLimitThreshold;
+	a->CompressibilitySpeed = CompressibilitySpeed;
+	a->CompressibilitySpeedWithSpeedBrakes = CompressibilitySpeedWithSpeedBrakes;
+	a->MaxFullPowerAltRatio = MaxFullPowerAltRatio;
+	a->ServiceCeilingAltitude = ServiceCeilingAltitude;
+	a->FlapSpeed = FlapSpeed;
+	a->SpeedBrakePower;
+}
+AircraftBasis get_basis(const Aircraft* a, Vec3* fwd, Vec3* right, Vec3* up) {
+	if (!a) {
+		if (fwd) *fwd = (Vec3){ 0.0f, 0.0f, 1.0f };
+		if (right) *right = (Vec3){ 1.0f, 0.0f, 0.0f };
+		if (up) *up = (Vec3){ 0.0f, 1.0f, 0.0f };
 		return;
 	}
-	total_force = zero();
-
-	// thrust calc
-	thrust_force = scale(basis.forward, (aircraft)->engine_thrust * clamp_float((aircraft)->throttle, 0.0f, 1.0f));
-	total_force = add(total_force, thrust_force);
-
-	// gravity calc
-	gravity_force.x = 0.0f;
-	gravity_force.y = -(aircraft)->mass * GRAVITY;
-	gravity_force.z = 0.0f;
-
-	total_force = add(total_force, gravity_force);
-
-	// aerodynamics calcs (q = 1/2 * rho * v^2)
-	forward_speed = dot((aircraft)->velocity, basis.forward);
-	vertical_speed = dot((aircraft)->velocity, basis.up);
-	lateral_speed = dot((aircraft)->velocity, basis.right);
-
-	if (forward_speed > EPSILON) {
-		angle_of_attack = atan2f(-vertical_speed, forward_speed);
-		sideslip_angle = atan2f(lateral_speed, forward_speed);
-	}
-
-	angle_of_attack = clamp_float(angle_of_attack, -MAX_ADA, MAX_ADA);
-	// aerodynamic
-	if (forward_speed > EPSILON) {
-		dynamic_pressure = 0.5f * AIR_DENSITY * speed * speed;
-
-		effective_lift_co = (aircraft)->lift_coefficient + angle_of_attack * LIFT_SLOPE;
-		// stall
-		if (fabsf(angle_of_attack) > STALL_ADA) {
-			stall_factor = 1.0f - (
-				(fabsf(angle_of_attack) - STALL_ADA) /
-				(MAX_ADA - STALL_ADA)
-				);
-			stall_factor = clamp_float(stall_factor, 0.0f, 1.0f);
-
-			effective_lift_co *= STALL_LIFT + (1.0f - STALL_LIFT) * stall_factor;
-		}
-		lift = dynamic_pressure * (aircraft)->wing_area * effective_lift_co;
-
-		if (!isfinite(lift)) {
-			printf("FATAL ERROR: lift became invalid\n");
-			return;
-		}
-		
-		side_force = -0.8f * sideslip_angle * dynamic_pressure * (aircraft)->wing_area;
-		side_forcevec = scale(basis.right, side_force);
-
-		total_force = add(total_force, side_forcevec);
-	}
-	if (speed > EPSILON) {
-		velocity_direction = normalize((aircraft)->velocity);
-		lift_direction = sub(basis.up, scale(velocity_direction, dot(basis.up, velocity_direction)));
-
-		if (length_squared(lift_direction) > EPSILON) {
-			lift_direction = normalize(lift_direction);
-
-			lift_force = scale(lift_direction, lift);
-			total_force = add(total_force, lift_force);
-		}
-
-		dynamic_pressure = 0.5f * AIR_DENSITY * speed * speed;
-		if (forward_speed > EPSILON) {
-			drag = dynamic_pressure * (aircraft)->wing_area * (aircraft)->drag_coefficient;
-			induced_drag = INDUCED_DRAG * lift * lift;
-			drag += induced_drag;
-		}
-		else {
-			drag = 0.0f;
-		}
-		if (!isfinite(drag)) {
-			printf("FATAL ERROR: drag became invalid\n");
-			return;
-		}
-		drag_force = scale(velocity_direction, -drag);
-		total_force = add(total_force, drag_force);
-
-	}
-	acceleration = 1.0f / (aircraft)->mass;
-
-	(aircraft)->velocity = add((aircraft)->velocity, scale(total_force, acceleration * dt));
-
-	aircraft->position = add(aircraft->position, scale((aircraft)->velocity, dt));
-	
-
-	float ramp_step = dt / INPUT_RAMP_TIME;
-
-	aircraft->input_pitch += ((float)input->pitch - aircraft->input_pitch) * ramp_step;
-	aircraft->input_yaw += ((float)input->yaw - aircraft->input_yaw) * ramp_step;
-	aircraft->input_roll += ((float)input->roll - aircraft->input_roll) * ramp_step;
-
-	if (input != 0 && speed > EPSILON) {
-		float q_dyn = 0.5f * AIR_DENSITY * speed * speed;
-
-		pitch_mom += q_dyn * (aircraft)->wing_area * MEAN_CHORD * CM_ELEVATOR * aircraft->input_pitch;
-		yaw_mom += q_dyn * (aircraft)->wing_area * WING_SPAN * CN_RUDDER * aircraft->input_yaw;
-		roll_mom += q_dyn * (aircraft)->wing_area * WING_SPAN * CL_AILERON * aircraft->input_roll;
-	}
-	if (speed > EPSILON) {
-		float q;
-		float pitch_rate;
-		float yaw_rate;
-		float roll_rate;
-		
-
-		q = 0.5f * AIR_DENSITY * speed * speed;
-
-		pitch_rate = (aircraft)->angular_velocity.x * MEAN_CHORD / (2.0f * speed);
-		yaw_rate = (aircraft)->angular_velocity.y * WING_SPAN / (2.0f * speed);
-		roll_rate = (aircraft)->angular_velocity.z * WING_SPAN / (2.0f * speed);
-
-		pitch_mom += q * (aircraft)->wing_area * MEAN_CHORD * (CM_ALPHA * angle_of_attack + CM_Q * pitch_rate);
-		yaw_mom += q * (aircraft)->wing_area * WING_SPAN * (CN_BETA * sideslip_angle + CN_R * yaw_rate);
-		roll_mom += q * (aircraft)->wing_area * WING_SPAN * (CL_BETA * sideslip_angle + CL_P * roll_rate);
-	}
-	angular_momentum = (Vec3){
-		(aircraft)->angular_velocity.x * aircraft->inertia_x,
-		(aircraft)->angular_velocity.y * aircraft->inertia_y,
-		(aircraft)->angular_velocity.z * aircraft->inertia_z,
-	};
-	
-	gyroscopic = cross((aircraft)->angular_velocity, angular_momentum);
-
-	(aircraft)->angular_velocity.x += (pitch_mom - gyroscopic.x) / aircraft->inertia_x * dt;
-	(aircraft)->angular_velocity.y += (yaw_mom - gyroscopic.y) / aircraft->inertia_y * dt;
-	(aircraft)->angular_velocity.z += (roll_mom - gyroscopic.z) / aircraft->inertia_z * dt;
-
-
-	// ANGULAR Z
-
-	{
-		Vec3 omega = (aircraft)->angular_velocity;
-		float wmag = length(omega);
-		Quaternion dq;
-
-		if (wmag > EPSILON) {
-			Vec3 axis = scale(omega, 1.0f / wmag);
-			dq = q_from_axangle(axis, wmag * dt);
-		}
-		else {
-			dq = q_identity();
-		}
-
-		aircraft->orientation = q_multiply(aircraft->orientation, dq);
-		aircraft->orientation = q_normalize(aircraft->orientation);
-	}
-	/*pitch_rot = q_from_axangle(rot_basis.right, ANGULAR.x * dt);
-	yaw_rot = q_from_axangle(rot_basis.up, ANGULAR.y * dt);
-	roll_rot = q_from_axangle(rot_basis.forward, ANGULAR.z * dt);
-
-	rot_delta = q_multiply(roll_rot, q_multiply(yaw_rot, pitch_rot));
-	aircraft->orientation = q_multiply(aircraft->orientation, rot_delta);
-	aircraft->orientation = q_normalize(aircraft->orientation);
-	*/
-
-	printf(
-		"YAW %.2f | ANG %.3f %.3f %.3f | "
-		"AOA %.3f BETA %.3f | MOM %.1f %.1f %.1f\n",
-		input != 0 ? input->yaw : 0.0f,
-		(aircraft)->angular_velocity.x,
-		(aircraft)->angular_velocity.y,
-		(aircraft)->angular_velocity.z,
-		angle_of_attack,
-		sideslip_angle,
-		pitch_mom,
-		yaw_mom,
-		roll_mom
-	);
-
+	if (fwd) *fwd = q_rotatevec(a->orientation, (Vec3) { 0.0f, 0.0f, 1.0f });
+	if (right) *right = q_rotatevec(a->orientation, (Vec3) { 1.0f, 0.0f, 0.0f });
+	if (up) *up = q_rotatevec(a->orientation, (Vec3) { 0.0f, 1.0f, 0.0f });
 }
 
+void get_euler(const Aircraft* a, float* gamma, float* theta, float* phi) {
+	Vec3 fwd, right, up;
+	get_basis(a, &fwd, &right, &up);
+
+	if (phi) {
+		float p = atan2f(-fwd.x, -fwd.z) * R2D;
+		if (p < 0.0f) p += 360.0f;
+		*phi = p;
+	}
+	if (gamma) {
+		float fy = clampf(fwd.y, -1.0f, 1.0f);
+		*gamma = 180.0f - asinf(fy) * R2D;
+	}
+	if (theta) {
+		*theta = atan2f(-right.y, up.y) * R2D;
+	}
+}
+
+void aircraft_update(Aircraft* a, const AircraftInput* in) {
+
+	printf(">>> update_aircraft chamado\n");
+	if (!a || !in) { printf(">>> a ou in NULL\n"); return; }
+	printf(">>> in->thrust=%.3f timefac=%.3f\n", in->thrust, in->timefac);
+	Vec3 vaxis, raxis, uaxis;
+	Quaternion dq_pitch, dq_yaw, dq_roll, dq;
+	float timefac, elevator, aileron, rudder;
+	float P_rad, Y_rad, R_rad;
+	float new_gamma, new_theta, theta_change;
+	float throttlechange;
+	float braking, brakepower;
+	float stepfac, scalef;
+	float gravityforce, pitch_angle;
+	float avg;
+	int i;
+
+	if (!a || !in) return;
+	timefac = in->timefac;
+	if (timefac <= 0.0f) return;
+	if (a->realspeed <= 0.0f) a->realspeed = 1.0f;
+
+	elevator = clampf(in->elevator, -1.0f, 1.0f);
+	aileron = clampf(in->ailerion, -1.0f, 1.0f);
+	rudder = clampf(in->rudder, -1.0f, 1.0f);
+
+	a->elevatoreffect = elevator;
+	a->rolleffect = aileron;
+	a->ruddereffect = rudder;
+	a->FlapsLevel = in->FlapsLevel;
+	a->UndercarriageLevel = in->UndercarriageLevel;
+	a->SpeedBrakeLevel = in->SpeedBrakeLevel;
+
+	a->recthrust = clampf(in->thrust, 0.0f, a->maxthrust);
+	throttlechange = a->maxthrust / 100.0f * timefac;
+	if (a->recthrust > a->thrust + throttlechange) {
+		a->thrust += throttlechange * 2.0f;
+	}
+	else if (a->recthrust < a->thrust - throttlechange) {
+		a->thrust -= throttlechange * 0.5f;
+	}
+	if (a->thrust > a->maxthrust) a->thrust = a->maxthrust;
+	if (a->thrust < 0.0f) a->thrust = 0.0f;
+
+	P_rad = elevator * a->manoeverability * (3.33f + 15.0f * a->realspeed) * timefac * D2R;
+	Y_rad = -rudder * a->manoeverability * (0.66f + 3.0f * a->realspeed) * timefac * D2R;
+	R_rad = -aileron * a->RollRate * (1.0f + a->realspeed) * timefac * 5.0f * D2R;
+
+	new_gamma = a->gamma + P_rad * R2D;
+	if (new_gamma > 180.0f + a->maxgamma) {
+		P_rad = (180.0f + a->maxgamma - a->gamma) * D2R;
+	}
+	else if (new_gamma < 180.0f - a->maxgamma) {
+		P_rad = (180.0f - a->maxgamma - a->gamma) * D2R;
+	}
+
+	theta_change = -R_rad * R2D;
+	new_theta = a->theta + theta_change;
+	if (new_theta > a->maxtheta) {
+		R_rad = -(a->maxtheta - a->theta) * D2R;
+	}
+	else if (new_theta < -a->maxtheta) {
+		R_rad = (a->maxtheta + a->theta) * D2R;
+	}
+
+	dq_pitch = q_from_axangle((Vec3) { 1.0f, 0.0f, 0.0f }, P_rad);
+	dq_yaw = q_from_axangle((Vec3) { 0.0f, 1.0f, 0.0f }, Y_rad);
+	dq_roll = q_from_axangle((Vec3) { 0.0f, 0.0f, 1.0f }, R_rad);
+	dq = q_multiply(dq_pitch, q_multiply(dq_yaw, dq_roll));
+	a->orientation = q_normalize(q_multiply(a->orientation, dq));
+
+	a->angular_velocity = (Vec3){ P_rad, Y_rad, R_rad };
+	get_euler(a, &a->gamma, &a->theta, &a->phi);
+	get_basis(a, &vaxis, &raxis, &uaxis);
+
+	braking = (fabsf(rudder * 20.0f) +
+		fabsf(elevator * 35.0f) +
+		fabsf(aileron * 18.0f) +
+		a->DragEffect) / 200.0f;
+	brakepower = powf(0.93f - braking, timefac);
+	a->accx *= brakepower;
+	a->accy *= brakepower;
+	a->accz *= brakepower;
+
+	a->accx += a->thrust * vaxis.x * 1.3f * timefac;
+	a->accy += a->thrust * vaxis.y * 0.5f * timefac;
+	a->accz += a->thrust * vaxis.z * 1.5f * timefac;
+
+	a->accx += a->thrust * uaxis.x * 0.067f * timefac;
+	a->accz += a->thrust * uaxis.z * 0.067f * timefac;
+
+	a->accy -= a->thrust * uaxis.y * 0.067f * timefac * cosf(a->theta * D2R);
+	a->accy -= 0.015f * timefac;
+	a->accy -= a->deadweight * timefac;
+	a->accy -= sinf((a->gamma - 180.0f) * D2R) * (a->InertiallyDampenedPlayerSpeed / 0.8f);
+
+	a->accx -= sinf(a->phi * D2R) * a->realspeed;
+	a->accz -= cosf(a->phi * D2R) * a->realspeed;
+
+	stepfac = 0.24f;
+	a->position.x += a->accx * timefac * stepfac;
+	a->position.z += a->accz * timefac * stepfac;
+	a->position.y += a->accy * timefac * stepfac;
+
+	scalef = 1.1f;
+	a->forcex = a->accx * stepfac * scalef;
+	a->forcey = a->accy * stepfac * scalef;
+	a->forcez = a->accz * stepfac * scalef;
+
+	gravityforce = sqrtf(a->realspeed) * vaxis.y * 1.10f * timefac;
+	a->forcez += gravityforce * vaxis.z;
+	a->forcex += gravityforce * vaxis.x;
+	a->forcey += gravityforce * vaxis.y;
+	
+	a->forcey -= gravityforce * vaxis.y * 2.2f;
+
+	{
+		float alt = a->position.y;
+		float d = 1.0f - alt * 0.000007f;
+		if (d < 0.4f) d = 0.4f;
+		a->AirDensityDrag = d;
+	}
+	a->forcex /= a->AirDensityDrag;
+	a->forcey /= a->AirDensityDrag;
+	a->forcez /= a->AirDensityDrag;
+
+	{
+		float excess = 0.0f;
+		float hi = 180.0f + a->maxgamma;
+		float lo = 180.0f - a->maxgamma;
+		if (a->gamma > hi) excess = a->gamma - hi;
+		else if (a->gamma < lo) excess = lo - a->gamma;
+		a->GammaDrag = 1.0f + excess * 0.05f;
+	}
+	a->forcex /= a->GammaDrag;
+	a->forcey /= a->GammaDrag;
+	a->forcez /= a->GammaDrag;
+
+	{
+		float fy = vaxis.y;
+		a->LoopedBeyondVerticalDrag = (fy < -0.3f) ? (1.0f - fy) : 1.0f;
+	}
+	a->forcex /= a->LoopedBeyondVerticalDrag;
+	a->forcey /= a->LoopedBeyondVerticalDrag;
+	a->forcez /= a->LoopedBeyondVerticalDrag;
+
+	{
+		float s = a->realspeed;
+		if (s > a->DiveSpeedStructuralLimit) {
+			float over = s - a->DiveSpeedStructuralLimit;
+			a->SpeedBeyondStructuralLimitsDrag = 1.0f + over * 5.0f;
+		}
+		else {
+			a->SpeedBeyondStructuralLimitsDrag = 1.0f;
+		}
+	}
+	a->forcex /= a->SpeedBeyondStructuralLimitsDrag;
+	a->forcey /= a->SpeedBeyondStructuralLimitsDrag;
+	a->forcez /= a->SpeedBeyondStructuralLimitsDrag;
+	{
+		float d = 1.0f;
+		if (a->FlapsLevel > 0.0f) {
+			float f = clampf(a->FlapsLevel / 4.0f, 0.0f, 1.0f);
+			d = 1.0f + f * 0.35f;
+		}
+		a->FlapDrag = d;
+	}
+	a->forcex /= a->FlapDrag;
+	a->forcey /= a->FlapDrag;
+	a->forcez /= a->FlapDrag;
+
+	a->UndercarriageDrag = a->UndercarriageLevel ? 1.25f : 1.0f;
+	a->forcex /= a->UndercarriageDrag;
+	a->forcey /= a->UndercarriageDrag;
+	a->forcez /= a->UndercarriageDrag;
+
+	a->UndercarriageDrag = a->UndercarriageLevel ? 1.25f : 1.0f;
+	a->forcex /= a->UndercarriageDrag;
+	a->forcey /= a->UndercarriageDrag;
+	a->forcez /= a->UndercarriageDrag;
+
+	
+	a->SpeedBrakeDrag = a->SpeedBrakeLevel ? a->SpeedBrakePower : 1.0f;
+	a->forcex /= a->SpeedBrakeDrag;
+	a->forcey /= a->SpeedBrakeDrag;
+	a->forcez /= a->SpeedBrakeDrag;
+
+
+	{
+		float fmag = sqrtf(a->forcex * a->forcex
+			+ a->forcey * a->forcey
+			+ a->forcez * a->forcez);
+		float limit = a->SeaLevelSpeedLimitThreshold * 3.0f;
+		if (fmag > limit && fmag > EPS) {
+			float k = limit / fmag;
+			a->RegulatedForceX = a->forcex * k;
+			a->RegulatedForceY = a->forcey * k;
+			a->RegulatedForceZ = a->forcez * k;
+		}
+		else {
+			a->RegulatedForceX = a->forcex;
+			a->RegulatedForceY = a->forcey;
+			a->RegulatedForceZ = a->forcez;
+		}
+	}
+	a->forcex = a->RegulatedForceX;
+	a->forcey = a->RegulatedForceY;
+	a->forcez = a->RegulatedForceZ;
+
+	/* Recalcula realspeed */
+	{
+		float r2 = a->forcex * a->forcex
+			+ a->forcey * a->forcey
+			+ a->forcez * a->forcez;
+		if (r2 <= 0.0f) r2 = 0.001f;
+		a->realspeed = sqrtf(r2);
+	}
+
+	/* -----------------------------------------------------------
+	 *  6) Histórico de velocidade (média móvel 10 amostras)
+	 * ----------------------------------------------------------- */
+	a->SpeedHistoryArray[a->SpeedHistoryIdx] = a->realspeed;
+	a->SpeedHistoryIdx = (a->SpeedHistoryIdx + 1) % 10;
+	avg = 0.0f;
+	for (i = 0; i < 10; i++) avg += a->SpeedHistoryArray[i];
+	a->InertiallyDampenedPlayerSpeed = avg / 10.0f;
+
+	/* -----------------------------------------------------------
+	 *  7) Atualiza velocity (proxy — corpo mundo)
+	 * ----------------------------------------------------------- */
+	a->velocity.x = a->forcex;
+	a->velocity.y = a->forcey;
+	a->velocity.z = a->forcez;
+
+	/* Piso rígido: não deixa cair abaixo de y=5 */
+	if (a->position.y < 5.0f) {
+		a->position.y = 5.0f;
+		if (a->accy < 0.0f) a->accy = 0.0f;
+		if (a->forcey < 0.0f) a->forcey = 0.0f;
+	}
+
+	(void)pitch_angle; /* reservado para expansões futuras */
+}

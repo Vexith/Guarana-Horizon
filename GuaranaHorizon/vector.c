@@ -62,3 +62,9 @@ Vec3 cross(Vec3 a, Vec3 b) {
 	result.z = a.x * b.y - a.y * b.x;
 	return result;
 }
+
+float clampf(float v, float lo, float hi) {
+	if (v < lo) return lo;
+	if (v > hi) return hi;
+	return v;
+}
