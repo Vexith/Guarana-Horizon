@@ -18,9 +18,6 @@
     <ClCompile Include="vector.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="aircraft.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="input.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -33,17 +30,17 @@
     <ClCompile Include="model.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="camera.c">
+    <ClCompile Include="quaternion.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="quaternion.c">
+    <ClCompile Include="aircraft.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="camera.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="aircraft.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="vector.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -60,6 +57,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="quaternion.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="aircraft.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

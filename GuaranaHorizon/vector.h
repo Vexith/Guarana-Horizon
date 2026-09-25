@@ -1,11 +1,14 @@
 #ifndef VECTOR_H
 #define VECTOR_H
+#define PI 3.14159265358979323846f
+
 
 typedef struct {
 	float x;
 	float y;
 	float z;
 } Vec3;
+
 
 Vec3 zero(void);
 Vec3 add(Vec3 a, Vec3 b);
@@ -22,5 +25,6 @@ Vec3 normalize(Vec3 v);
 Vec3 cross(Vec3 a, Vec3 b);
 
 float clampf(float v, float lo, float hi);
+Vec3 color_hex(unsigned int hex);
 
 #endif

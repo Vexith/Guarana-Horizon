@@ -149,7 +149,10 @@
     <ClCompile Include="camera.c" />
     <ClCompile Include="input.c" />
     <ClCompile Include="main.c" />
-    <ClCompile Include="model.c" />
+    <ClCompile Include="model.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CompileAsC</CompileAs>
+    </ClCompile>
     <ClCompile Include="quaternion.c" />
     <ClCompile Include="renderer.c" />
     <ClCompile Include="vector.c" />

@@ -1,9 +1,9 @@
-#ifndef CAMERA_H
-#define CAMERA_H
-
 #include "vector.h"
 #include "aircraft.h"
 #include "input.h"
+
+#ifndef CAMERA_H
+#define CAMERA_H
 
 typedef struct {
 	Vec3 position;
@@ -26,10 +26,6 @@ typedef struct {
 } Camera;
 
 void camera_init(Camera* camera);
-void follow_plane(Camera* camera, const Aircraft* aircraft, float dt, float mouse_dx, float mouse_dy);
-
-void get_viewmatrix(const Camera* cam, float out[16]);
-void get_projmatrix(const Camera* cam, float aspect, float out[16]);
-
+void follow_plane(Camera* camera, const Aircraft* aircraft, float dt);
 
 #endif

@@ -5,20 +5,23 @@
 #include "quaternion.h"
 #include "vector.h"
 #include "input.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "model.h"
 
 typedef struct {
 	Vec3 forward, right, up;
 } AircraftBasis;
 
 typedef struct {
+	Model* model;
 	Vec3 position;
 	Quaternion orientation;
 	Vec3 velocity;
 	Vec3 angular_velocity;
+	float elevator_smooth;
+	float ailerion_smooth;
+	float rudder_smooth;
+
+
 
 	float gamma;
 	float theta;
@@ -88,7 +91,7 @@ typedef struct {
 
 void aircraft_init(Aircraft* a);
 void aircraft_update(Aircraft* a, const AircraftInput* in);
-AircraftBasis get_basis(const Aircraft* a, Vec3* fwd, Vec3* rgt, Vec3* up);
+void get_basis(const Aircraft* a, Vec3* fwd, Vec3* rgt, Vec3* up);
 void get_euler(const Aircraft* a, float* gamma, float* theta, float* phi);
 
 void set_model(Aircraft* a,

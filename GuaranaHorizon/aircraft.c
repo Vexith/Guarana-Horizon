@@ -8,7 +8,8 @@
 #define D2R 0.017453f
 #define R2D 57.295779513f
 #define EPS 1e-8f
-#define M_PI 3.14f
+#define INPUT_SMOOTH_TIME 0.20f
+
 
 void aircraft_init(Aircraft* a) {
 	if (!a) return;
@@ -18,8 +19,11 @@ void aircraft_init(Aircraft* a) {
 	a->velocity = zero();
 	a->angular_velocity = zero();
 	
-	a->orientation = q_from_axangle((Vec3) { 0.0f, 1.0f, 0.0f }, (float)M_PI);
-	
+	a->orientation = q_from_axangle((Vec3) { 0.0f, 1.0f, 0.0f }, (float)PI);
+	a->elevator_smooth = 0.0f;
+	a->ailerion_smooth = 0.0f;
+	a->rudder_smooth = 0.0f;
+
 	a->gamma = 180.0f;
 	a->theta = 0.0f;
 	a->phi = 0.0f;
@@ -33,7 +37,7 @@ void aircraft_init(Aircraft* a) {
 	a->maxthrust = 1.5f;
 	a->manoeverability = 0.15f;
 	a->RollRate = 0.55f;
-	a->maxgamma = 25.0f;
+	a->maxgamma = 65.0f;
 	a->maxtheta = 90.0f;
 	a->inertia = 2.5f;
 	a->deadweight = 0.13f;
@@ -90,7 +94,7 @@ void set_model(Aircraft* a, float maxthrust, float manoeverability, float RollRa
 	a->FlapSpeed = FlapSpeed;
 	a->SpeedBrakePower;
 }
-AircraftBasis get_basis(const Aircraft* a, Vec3* fwd, Vec3* right, Vec3* up) {
+void get_basis(const Aircraft* a, Vec3* fwd, Vec3* right, Vec3* up) {
 	if (!a) {
 		if (fwd) *fwd = (Vec3){ 0.0f, 0.0f, 1.0f };
 		if (right) *right = (Vec3){ 1.0f, 0.0f, 0.0f };
@@ -122,9 +126,9 @@ void get_euler(const Aircraft* a, float* gamma, float* theta, float* phi) {
 
 void aircraft_update(Aircraft* a, const AircraftInput* in) {
 
-	printf(">>> update_aircraft chamado\n");
+	//printf(">>> update_aircraft chamado\n");
 	if (!a || !in) { printf(">>> a ou in NULL\n"); return; }
-	printf(">>> in->thrust=%.3f timefac=%.3f\n", in->thrust, in->timefac);
+	//printf(">>> in->thrust=%.3f timefac=%.3f\n", in->thrust, in->timefac);
 	Vec3 vaxis, raxis, uaxis;
 	Quaternion dq_pitch, dq_yaw, dq_roll, dq;
 	float timefac, elevator, aileron, rudder;
@@ -145,7 +149,18 @@ void aircraft_update(Aircraft* a, const AircraftInput* in) {
 	elevator = clampf(in->elevator, -1.0f, 1.0f);
 	aileron = clampf(in->ailerion, -1.0f, 1.0f);
 	rudder = clampf(in->rudder, -1.0f, 1.0f);
+	{
+		float dt_real = timefac / 60.0f;
+		float alpha = 1.0f - expf(-dt_real / INPUT_SMOOTH_TIME);
 
+		a->elevator_smooth += (elevator - a->elevator_smooth) * alpha;
+		a->ailerion_smooth += (aileron - a->ailerion_smooth) * alpha;
+		a->rudder_smooth += (rudder - a->rudder_smooth) * alpha;
+
+		elevator = a->elevator_smooth;
+		aileron = a->ailerion_smooth;
+		rudder = a->rudder_smooth;
+	}
 	a->elevatoreffect = elevator;
 	a->rolleffect = aileron;
 	a->ruddereffect = rudder;
@@ -164,41 +179,62 @@ void aircraft_update(Aircraft* a, const AircraftInput* in) {
 	if (a->thrust > a->maxthrust) a->thrust = a->maxthrust;
 	if (a->thrust < 0.0f) a->thrust = 0.0f;
 
-	P_rad = elevator * a->manoeverability * (3.33f + 15.0f * a->realspeed) * timefac * D2R;
-	Y_rad = -rudder * a->manoeverability * (0.66f + 3.0f * a->realspeed) * timefac * D2R;
-	R_rad = -aileron * a->RollRate * (1.0f + a->realspeed) * timefac * 5.0f * D2R;
+	P_rad = elevator * a->manoeverability * (3.33f + 8.0f * a->realspeed) * timefac * D2R;
+	Y_rad = -rudder * a->manoeverability * (0.66f + 2.0f * a->realspeed) * timefac * D2R;
+	R_rad = -aileron * a->RollRate * (1.0f + a->realspeed) * timefac * 3.5f * D2R;
 
+	{
+		const float inertia_factor = 0.88;
+		const float inertia_yaw = 0.90f;
+		const float inertia_roll = 0.78f;
+
+		a->angular_velocity.x = a->angular_velocity.x * inertia_factor + P_rad * (1.0f - inertia_factor);
+		a->angular_velocity.y = a->angular_velocity.y * inertia_yaw + Y_rad * (1.0f - inertia_factor);
+		a->angular_velocity.z = a->angular_velocity.z * inertia_roll + R_rad * (1.0f - inertia_factor);
+
+		P_rad = a->angular_velocity.x;
+		Y_rad = a->angular_velocity.y;
+		R_rad = a->angular_velocity.z;
+	}
+
+	
+	float gamma_hi = 180.0f + a->maxgamma;
+	float gamma_lo = 180.0f - a->maxgamma;
+	float soft_zone = 12.0f;
+	float spring_k = 0.002f;
+	float damping = 0.4f;
+
+	if (a->gamma > gamma_hi - soft_zone) {
+		float x = (a->gamma - (gamma_hi - soft_zone)) / soft_zone;
+		if (x > 1.0f) x = 1.0f;
+		float spring_force = x * x * spring_k; // hooke's law
+		P_rad += spring_force;
+	}
+	else if (a->gamma < gamma_lo + soft_zone) {
+		float x = ((gamma_lo + soft_zone) - a->gamma) / soft_zone;
+		if (x > 1.0f) x = 1.0f;
+		float spring_force = x * x * spring_k;
+		P_rad += spring_force;
+	}
 	new_gamma = a->gamma + P_rad * R2D;
-	if (new_gamma > 180.0f + a->maxgamma) {
-		P_rad = (180.0f + a->maxgamma - a->gamma) * D2R;
-	}
-	else if (new_gamma < 180.0f - a->maxgamma) {
-		P_rad = (180.0f - a->maxgamma - a->gamma) * D2R;
-	}
-
-	theta_change = -R_rad * R2D;
-	new_theta = a->theta + theta_change;
-	if (new_theta > a->maxtheta) {
-		R_rad = -(a->maxtheta - a->theta) * D2R;
-	}
-	else if (new_theta < -a->maxtheta) {
-		R_rad = (a->maxtheta + a->theta) * D2R;
-	}
-
+	if (new_gamma > gamma_hi) P_rad = (gamma_hi - a->gamma) * D2R;
+	if (new_gamma < gamma_lo) P_rad = (gamma_lo - a->gamma) * D2R;
+	
+	a->angular_velocity = (Vec3){ P_rad, Y_rad, R_rad };
 	dq_pitch = q_from_axangle((Vec3) { 1.0f, 0.0f, 0.0f }, P_rad);
 	dq_yaw = q_from_axangle((Vec3) { 0.0f, 1.0f, 0.0f }, Y_rad);
 	dq_roll = q_from_axangle((Vec3) { 0.0f, 0.0f, 1.0f }, R_rad);
 	dq = q_multiply(dq_pitch, q_multiply(dq_yaw, dq_roll));
 	a->orientation = q_normalize(q_multiply(a->orientation, dq));
 
-	a->angular_velocity = (Vec3){ P_rad, Y_rad, R_rad };
+	
 	get_euler(a, &a->gamma, &a->theta, &a->phi);
 	get_basis(a, &vaxis, &raxis, &uaxis);
 
-	braking = (fabsf(rudder * 20.0f) +
-		fabsf(elevator * 35.0f) +
-		fabsf(aileron * 18.0f) +
-		a->DragEffect) / 200.0f;
+	braking = (fabsf(rudder * 6.0f) +
+		fabsf(elevator * 10.0f) +
+		fabsf(aileron * 5.0f) +
+		a->DragEffect) / 500.0f;
 	brakepower = powf(0.93f - braking, timefac);
 	a->accx *= brakepower;
 	a->accy *= brakepower;
@@ -329,7 +365,6 @@ void aircraft_update(Aircraft* a, const AircraftInput* in) {
 	a->forcey = a->RegulatedForceY;
 	a->forcez = a->RegulatedForceZ;
 
-	/* Recalcula realspeed */
 	{
 		float r2 = a->forcex * a->forcex
 			+ a->forcey * a->forcey
@@ -338,28 +373,21 @@ void aircraft_update(Aircraft* a, const AircraftInput* in) {
 		a->realspeed = sqrtf(r2);
 	}
 
-	/* -----------------------------------------------------------
-	 *  6) Histórico de velocidade (média móvel 10 amostras)
-	 * ----------------------------------------------------------- */
 	a->SpeedHistoryArray[a->SpeedHistoryIdx] = a->realspeed;
 	a->SpeedHistoryIdx = (a->SpeedHistoryIdx + 1) % 10;
 	avg = 0.0f;
 	for (i = 0; i < 10; i++) avg += a->SpeedHistoryArray[i];
 	a->InertiallyDampenedPlayerSpeed = avg / 10.0f;
 
-	/* -----------------------------------------------------------
-	 *  7) Atualiza velocity (proxy — corpo mundo)
-	 * ----------------------------------------------------------- */
 	a->velocity.x = a->forcex;
 	a->velocity.y = a->forcey;
 	a->velocity.z = a->forcez;
 
-	/* Piso rígido: não deixa cair abaixo de y=5 */
 	if (a->position.y < 5.0f) {
 		a->position.y = 5.0f;
 		if (a->accy < 0.0f) a->accy = 0.0f;
 		if (a->forcey < 0.0f) a->forcey = 0.0f;
 	}
 
-	(void)pitch_angle; /* reservado para expansões futuras */
+	(void)pitch_angle; 
 }

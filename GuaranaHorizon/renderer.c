@@ -1,5 +1,6 @@
 #include "renderer.h"
 #include <math.h>
+#include <stdlib.h>
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include "aircraft.h"
@@ -9,15 +10,16 @@ static SDL_Renderer* renderer = NULL;
 
 #define WIDTH 1280
 #define HEIGHT 720
-
-#define PI 3.14159826f
 #define GRID_EXTENT 1000.0f
 #define GRID_STEP 50.0f
 #define GRID_CELLS 20
 
 #define MESH_NUM_VERTS ((int)(sizeof(MESH_VERTS) / sizeof(MESH_VERTS[0])))
 #define MESH_NUM_TRIS ((int)(sizeof(MESH_TRIS) / sizeof(MESH_TRIS[0])))
-
+typedef struct {
+	float depth;
+	int ia, ib, ic;
+} TriSort;
 static const Vec3 MESH_VERTS[] = {
 	{ 0.0f, 0.0f, 25.0f },
 	{ 0.0f, 5.0f, -15.0f },
@@ -161,6 +163,13 @@ static int project_segment(const Camera* cam, Vec3 a, Vec3 b, float* x1, float* 
 	if (*y2 > L) *y2 = L;  if (*y2 < -L) *y2 = -L;
 	return 1;
 }
+static int tri_sort_cmp(const void* a, const void* b) {
+	float da = ((const TriSort*)a)->depth;
+	float db = ((const TriSort*)b)->depth;
+	if (da > db) return -1;
+	if (da < db) return 1;
+	return 0;
+}
 void draw_ground(const Camera* cam, Vec3 focus) {
 	if (cam == NULL) return;
 
@@ -226,75 +235,84 @@ void draw_ground(const Camera* cam, Vec3 focus) {
 			}
 		}
 	}
-
+	
 	if (n > 0) {
+		
 		SDL_RenderGeometry(renderer, NULL, verts, n, NULL, 0);
 	}
 }
-void draw_ground_grid(const Camera* cam) {
-	if (cam == NULL) return;
 
-	SDL_SetRenderDrawColor(renderer, 60, 80, 60, 255);
-
-	for (float x = -GRID_EXTENT; x <= GRID_EXTENT; x += GRID_STEP) {
-		Vec3 a = { x, 0.0f, -GRID_EXTENT };
-		Vec3 b = { x, 0.0f, GRID_EXTENT };
-
-		float x1, y1, x2, y2;
-		if (!project_segment(cam, a, b, &x1, &y1, &x2, &y2)) continue;
-		SDL_RenderLine(renderer, x1, y1, x2, y2);
-	}
-
-	for (float z = -GRID_EXTENT; z <= GRID_EXTENT; z += GRID_STEP) {
-		Vec3 a = { -GRID_EXTENT, 0.0f, z };
-		Vec3 b = { GRID_EXTENT, 0.0f, z };
-
-		float x1, y1, x2, y2;
-		if (!project_segment(cam, a, b, &x1, &y1, &x2, &y2)) continue;
-
-		if (x1 > 5000.0f || x1 < -5000.0f || y1 > 5000.0f || y1 < -5000.0f) continue;
-		if (x2 > 5000.0f || x2 < -5000.0f || y2 > 5000.0f || y2 < -5000.0f) continue;
-
-
-		SDL_RenderLine(renderer, x1, y1, x2, y2);
-	}
-}
-void draw_airplane(const Aircraft* aircraft, const Camera* camera) {
+void draw_airplane(const Aircraft* aircraft, const Camera* camera, Vec3 color) {
 	if (aircraft == 0 || camera == 0) return;
+	if (!aircraft->model->positions || !aircraft->model->indices) return;
+
+	const Model* mesh = aircraft->model;
 
 	Vec3 basis_forward, basis_right, basis_up;
 	get_basis(aircraft, &basis_forward, &basis_right, &basis_up);
 
-	const float base_r = 0.85f;
-	const float base_g = 0.85f;
-	const float base_b = 0.90f;
+	const float base_r = color.x;
+	const float base_g = color.y;
+	const float base_b = color.z;
 
-	Vec3 world[MESH_NUM_VERTS];
-	for (int i = 0; i < MESH_NUM_VERTS; i++) {
-		Vec3 L = MESH_VERTS[i];
-		world[i] = add(aircraft->position,
-			add(scale(basis_right, L.x),
-				add(scale(basis_up, L.y),
-					scale(basis_forward, L.z))));
-	}
+	Vec3 pos = aircraft->position;
+	float s = mesh->scale;
 
-	SDL_Vertex verts[MESH_NUM_TRIS * 3];
+	SDL_Vertex verts[3072];
 	int n = 0;
 
-	for (int t = 0; t < MESH_NUM_TRIS; t++) {
-		Vec3 A = world[MESH_TRIS[t].a];
-		Vec3 B = world[MESH_TRIS[t].b];
-		Vec3 C = world[MESH_TRIS[t].c];
+	int tri_count = mesh->index_count / 3;
+	TriSort* list = (TriSort*)malloc(sizeof(TriSort) * tri_count);
+	if (!list) return;
+	for (int t = 0; t < tri_count; t++) {
+		int ia = mesh->indices[t * 3 + 0];
+		int ib = mesh->indices[t * 3 + 1];
+		int ic = mesh->indices[t * 3 + 2];
+		Vec3 La = scale(mesh->positions[ia], s);
+		Vec3 Lb = scale(mesh->positions[ib], s);
+		Vec3 Lc = scale(mesh->positions[ic], s);
+		Vec3 A = add(pos, add(scale(basis_right, La.x), add(scale(basis_up, La.y), scale(basis_forward, La.z))));
+		Vec3 B = add(pos, add(scale(basis_right, Lb.x), add(scale(basis_up, Lb.y), scale(basis_forward, Lb.z))));
+		Vec3 C = add(pos, add(scale(basis_right, Lc.x), add(scale(basis_up, Lc.y), scale(basis_forward, Lc.z))));
+		Vec3 mid = scale(add(A, add(B, C)), 1.0f / 3.0f);
+		Vec3 d = sub(mid, camera->position);
+		list[t].depth = dot(d, d);
+		list[t].ia = ia;
+		list[t].ib = ib;
+		list[t].ic = ic;
+	}
+
+	qsort(list, tri_count, sizeof(TriSort), tri_sort_cmp);
+
+	int bad_idx = 0;
+	for (int t = 0; t < tri_count; t++) {
+		if (list[t].ia < 0 || list[t].ia >= mesh->vertex_count) { bad_idx++; }
+		if (list[t].ib < 0 || list[t].ib >= mesh->vertex_count) { bad_idx++; }
+		if (list[t].ic < 0 || list[t].ic >= mesh->vertex_count) { bad_idx++; }
+	}
+	if (bad_idx > 0) { free(list); return; }
+
+	for (int t = 0; t < tri_count; t++) {
+		int ia = list[t].ia;
+		int ib = list[t].ib;
+		int ic = list[t].ic;
+
+		Vec3 La = scale(mesh->positions[ia], s);
+		Vec3 Lb = scale(mesh->positions[ib], s);
+		Vec3 Lc = scale(mesh->positions[ic], s);
+
+		Vec3 A = add(pos, add(scale(basis_right, La.x), add(scale(basis_up, La.y), scale(basis_forward, La.z))));
+		Vec3 B = add(pos, add(scale(basis_right, Lb.x), add(scale(basis_up, Lb.y), scale(basis_forward, Lb.z))));
+		Vec3 C = add(pos, add(scale(basis_right, Lc.x), add(scale(basis_up, Lc.y), scale(basis_forward, Lc.z))));
 
 		Vec3 nrm = cross(sub(B, A), sub(C, A));
 		Vec3 to_cam = sub(camera->position, A);
-		if (dot(nrm, to_cam) <= 0.0f) continue;
+		if (dot(nrm, to_cam) <= 0.01f) continue;
 
 		nrm = normalize(nrm);
-
 		float shade = fabsf(dot(nrm, WORLD_LIGHT));
 		if (shade < 0.15f) shade = 0.15f;
-
+		
 		Vec3 pts[3] = { A, B, C };
 		float px[3], py[3];
 		bool ok = true;
@@ -304,6 +322,7 @@ void draw_airplane(const Aircraft* aircraft, const Camera* camera) {
 		if (!ok) continue;
 
 		SDL_FColor col = { base_r * shade, base_g * shade, base_b * shade, 1.0f };
+		if (n + 3 > (int)(sizeof(verts) / sizeof(verts[0]))) break;
 
 		for (int k = 0; k < 3; k++) {
 			verts[n].position.x = px[k];
@@ -315,6 +334,7 @@ void draw_airplane(const Aircraft* aircraft, const Camera* camera) {
 		}
 	}
 
+	free(list);
 	if (n > 0) {
 		SDL_RenderGeometry(renderer, NULL, verts, n, NULL, 0);
 	}

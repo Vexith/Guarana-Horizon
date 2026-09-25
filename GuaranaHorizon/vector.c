@@ -33,6 +33,13 @@ float dot(Vec3 a, Vec3 b) {
 		a.y * b.y +
 		a.z * b.z;
 }
+Vec3 color_hex(unsigned int hex) {
+	Vec3 c;
+	c.x = ((hex >> 16) & 0xFF) / 255.0f;
+	c.y = ((hex >> 8) & 0xFF) / 255.0f;
+	c.z = (hex & 0xFF) / 255.f;
+	return c;
+}
 Vec3 scale(Vec3 v, float scalar) {
 	Vec3 result;
 
