@@ -12,6 +12,9 @@ typedef struct {
 } AircraftBasis;
 
 typedef struct {
+	float respawn_timer;
+	Vec3 spawn_position;
+	float spawn_yaw;
 	Model* model;
 	Vec3 position;
 	Quaternion orientation;
@@ -20,8 +23,6 @@ typedef struct {
 	float elevator_smooth;
 	float ailerion_smooth;
 	float rudder_smooth;
-
-
 
 	float gamma;
 	float theta;
@@ -48,33 +49,15 @@ typedef struct {
 	float maxtheta;
 	float inertia;
 	float deadweight;
-	float StaticDrag;
+
 	float StallSpeed;
 	float DiveSpeedLimit1;
 	float DiveSpeedStructuralLimit;
 	float SeaLevelSpeedLimitThreshold;
-	float CompressibilitySpeed;
-	float CompressibilitySpeedWithSpeedBrakes;
-	float MaxFullPowerAltRatio;
-	float ServiceCeilingAltitude;
 	float SpeedBrakePower;
-	float ClipDistance;
-	float BlackoutSensitivity;
-	float RedoutSensitivity;
-
-	float FlapSpeed;
-	float FlapsLevelElevatorEffect0;
-	float FlapsLevelElevatorEffect1;
-	float FlapsLevelElevatorEffect2;
-	float FlapsLevelElevatorEffect3;
-	float FlapsLevelElevatorEffect4;
-
-	int OnTheGround;
-	int WepCapable;
 
 	float SpeedHistoryArray[10];
 	int SpeedHistoryIdx;
-	float InertiaTimer;
 	float InertiallyDampenedPlayerSpeed;
 
 	float AirDensityDrag;
@@ -87,6 +70,12 @@ typedef struct {
 	float RegulatedForceX;
 	float RegulatedForceY;
 	float RegulatedForceZ;
+
+	float durability;
+	float max_durability;
+	int alive;
+	float damage_flash;
+
 } Aircraft;
 
 void aircraft_init(Aircraft* a);
@@ -103,4 +92,7 @@ void set_model(Aircraft* a,
 	float CompressibilitySpeed, float CompressibilitySpeedWithSpeedBrakes,
 	float MaxFullPowerAltRatio, float ServiceCeilingAltitude,
 	float FlapSpeed, float SpeedBrakePower);
+void aircraft_apply_damage(Aircraft* air, float dmg);
+void aircraft_respawn(Aircraft* air);
+
 #endif 

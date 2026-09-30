@@ -6,7 +6,7 @@
 #include "aircraft.h"
 
 static SDL_Window* window = NULL;
-static SDL_Renderer* renderer = NULL;
+SDL_Renderer* g_sdl_renderer = NULL;
 
 #define WIDTH 1280
 #define HEIGHT 720
@@ -48,8 +48,8 @@ int renderer_init(void) {
 		return 0;
 	}
 
-	renderer = SDL_CreateRenderer(window, NULL);
-	if (renderer == NULL) {
+	g_sdl_renderer = SDL_CreateRenderer(window, NULL);
+	if (g_sdl_renderer == NULL) {
 		SDL_DestroyWindow(window);
 		SDL_Quit();
 		return 0;
@@ -58,8 +58,8 @@ int renderer_init(void) {
 }
 
 void shutdown(void) {
-	if (renderer != NULL)
-		SDL_DestroyRenderer(renderer);
+	if (g_sdl_renderer != NULL)
+		SDL_DestroyRenderer(g_sdl_renderer);
 	if (window != NULL)
 		SDL_DestroyWindow(window);
 
@@ -69,23 +69,23 @@ void shutdown(void) {
 void clear_renderer(void) {
 	bool debug = true;
 	if (debug == true) {
-		if (!SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255)) {
+		if (!SDL_SetRenderDrawColor(g_sdl_renderer, 20, 20, 30, 255)) {
 			printf("Clear color error: %s\n", SDL_GetError());
 		}
-		if (!SDL_RenderClear(renderer)) {
+		if (!SDL_RenderClear(g_sdl_renderer)) {
 			printf("Render clear error: %s\n", SDL_GetError());
 		}
 	}
 	else {
-	SDL_SetRenderDrawColor(renderer, 10, 10, 20, 255);
-	SDL_RenderClear(renderer);
+	SDL_SetRenderDrawColor(g_sdl_renderer, 10, 10, 20, 255);
+	SDL_RenderClear(g_sdl_renderer);
 	}
 	
 	
 }
 
 void renderer_present(void) {
-	SDL_RenderPresent(renderer);
+	SDL_RenderPresent(g_sdl_renderer);
 }
 static Vec3 rotate_point(Vec3 point, Vec3 rotation) {
 	Vec3 rotated;
@@ -119,50 +119,7 @@ static Vec3 rotate_point(Vec3 point, Vec3 rotation) {
 	rotated.z = point.z;
 	return rotated;
 }
-static int project_segment(const Camera* cam, Vec3 a, Vec3 b, float* x1, float* x2, float* y1, float* y2) {
-	float fov_radians = cam->fov * PI / 180.0f;
-	float focal_length = 1.0f / tanf(fov_radians * 0.5f);
 
-	Vec3 forward = normalize(sub(cam->target, cam->position));
-	Vec3 right = normalize(cross(cam->up, forward));
-	Vec3 up = cross(forward, right);
-
-	Vec3 ra = sub(a, cam->position);
-	Vec3 rb = sub(b, cam->position);
-
-	float za = dot(ra, forward);
-	float zb = dot(rb, forward);
-	float n = cam->near_plane;
-
-	if (za <= n) {
-		float t = (n - za) / (zb - za);
-		ra = add(ra, scale(sub(rb, ra), t));
-		za = n;
-	}
-	else if (zb <= n) {
-		float t = (n - zb) / (za - zb);
-		rb = add(rb, scale(sub(ra, rb), t));
-		zb = n;
-	}
-
-	float xa = dot(ra, right);
-	float ya = dot(ra, up);
-	float xb = dot(rb, right);
-	float yb = dot(rb, up);
-
-
-	*x1 = WIDTH * 0.5f + (xa * focal_length / za) * (HEIGHT * 0.5f);
-	*y1 = HEIGHT * 0.5f - (ya * focal_length / za) * (HEIGHT * 0.5f);
-	*x2 = WIDTH * 0.5f + (xb * focal_length / zb) * (HEIGHT * 0.5f);
-	*y2 = HEIGHT * 0.5f - (yb * focal_length / zb) * (HEIGHT * 0.5f);
-
-	float L = 1.0e5f;
-	if (*x1 > L) *x1 = L;  if (*x1 < -L) *x1 = -L;
-	if (*y1 > L) *y1 = L;  if (*y1 < -L) *y1 = -L;
-	if (*x2 > L) *x2 = L;  if (*x2 < -L) *x2 = -L;
-	if (*y2 > L) *y2 = L;  if (*y2 < -L) *y2 = -L;
-	return 1;
-}
 static int tri_sort_cmp(const void* a, const void* b) {
 	float da = ((const TriSort*)a)->depth;
 	float db = ((const TriSort*)b)->depth;
@@ -238,13 +195,15 @@ void draw_ground(const Camera* cam, Vec3 focus) {
 	
 	if (n > 0) {
 		
-		SDL_RenderGeometry(renderer, NULL, verts, n, NULL, 0);
+		SDL_RenderGeometry(g_sdl_renderer, NULL, verts, n, NULL, 0);
 	}
 }
 
 void draw_airplane(const Aircraft* aircraft, const Camera* camera, Vec3 color) {
 	if (aircraft == 0 || camera == 0) return;
+	if (!aircraft->model) return;
 	if (!aircraft->model->positions || !aircraft->model->indices) return;
+	if (!aircraft->alive) return;
 
 	const Model* mesh = aircraft->model;
 
@@ -321,7 +280,17 @@ void draw_airplane(const Aircraft* aircraft, const Camera* camera, Vec3 color) {
 		}
 		if (!ok) continue;
 
-		SDL_FColor col = { base_r * shade, base_g * shade, base_b * shade, 1.0f };
+		float flash = aircraft->damage_flash;
+		if (flash > 1.0f) flash = 1.0f;
+		if (flash < 0.0f) flash = 0.0f;
+
+		float fr = base_r * shade * (1.0f - flash) + 1.0f * flash;
+		float fg = base_g * shade * (1.0f - flash) + 0.15f * flash;
+		float fb = base_b * shade * (1.0f - flash) + 0.15 * flash;
+
+		SDL_FColor col = { fr, fg, fb, 1.0f };
+
+
 		if (n + 3 > (int)(sizeof(verts) / sizeof(verts[0]))) break;
 
 		for (int k = 0; k < 3; k++) {
@@ -336,7 +305,7 @@ void draw_airplane(const Aircraft* aircraft, const Camera* camera, Vec3 color) {
 
 	free(list);
 	if (n > 0) {
-		SDL_RenderGeometry(renderer, NULL, verts, n, NULL, 0);
+		SDL_RenderGeometry(g_sdl_renderer, NULL, verts, n, NULL, 0);
 	}
 }
 int project_point(const Camera* camera, Vec3 point, float* screen_x, float* screen_y) {

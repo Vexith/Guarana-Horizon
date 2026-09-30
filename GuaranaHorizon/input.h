@@ -12,6 +12,7 @@ typedef struct {
 	int UndercarriageLevel;
 	int SpeedBrakeLevel;
 	float timefac;
+	int fire;
 } AircraftInput;
 
 void input_init(AircraftInput* input);

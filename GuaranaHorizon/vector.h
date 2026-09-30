@@ -1,7 +1,9 @@
 #ifndef VECTOR_H
 #define VECTOR_H
-#define PI 3.14159265358979323846f
 
+#define PI 3.14159265358979323846f
+#define D2R 0.01745329f
+#define R2D 57.295779513f
 
 typedef struct {
 	float x;

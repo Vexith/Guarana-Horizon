@@ -19,5 +19,6 @@ int project_point(const Camera* camera, Vec3 point, float* screen_x, float* scre
 void draw_airplane(const Aircraft* aircraft, const Camera* camera, Vec3 color);
 void draw_ground(const Camera* cam, Vec3 focus);
 
+extern SDL_Renderer* g_sdl_renderer;
 
 #endif

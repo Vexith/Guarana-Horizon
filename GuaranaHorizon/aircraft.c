@@ -5,8 +5,6 @@
 
 #include <string.h>
 
-#define D2R 0.017453f
-#define R2D 57.295779513f
 #define EPS 1e-8f
 #define INPUT_SMOOTH_TIME 0.20f
 
@@ -45,12 +43,7 @@ void aircraft_init(Aircraft* a) {
 	a->DiveSpeedLimit1 = 0.35f;
 	a->DiveSpeedStructuralLimit = 0.45f;
 	a->SeaLevelSpeedLimitThreshold = 0.36f;
-	a->CompressibilitySpeed = 0.3f;
-	a->CompressibilitySpeedWithSpeedBrakes = 0.31f;
-	a->MaxFullPowerAltRatio = 0.68f;
-	a->ServiceCeilingAltitude = 1760.0f;
 	a->SpeedBrakePower = 1.0f;
-	a->ClipDistance = 0.03f;
 
 	a->AirDensityDrag = 1.0f;
 	a->GammaDrag = 1.0f;
@@ -59,12 +52,14 @@ void aircraft_init(Aircraft* a) {
 	a->FlapDrag = 1.0f;
 	a->UndercarriageDrag = 1.0f;
 	a->SpeedBrakeDrag = 1.0f;
-
+	
 	a->SpeedHistoryIdx = 0;
 	a->InertiallyDampenedPlayerSpeed = 0.30f;
 
-	a->OnTheGround = 0;
-	a->WepCapable = 1;
+	a->max_durability = 100.0f;
+	a->durability = 100.0f;
+	a->alive = 1;
+	a->damage_flash = 0.0f;
 }
 void set_model(Aircraft* a, float maxthrust, float manoeverability, float RollRate,
 	float maxgamma, float maxtheta, float inertia,
@@ -75,6 +70,11 @@ void set_model(Aircraft* a, float maxthrust, float manoeverability, float RollRa
 	float MaxFullPowerAltRatio, float ServiceCeilingAltitude,
 	float FlapSpeed, float SpeedBrakePower) {
 	if (!a) return;
+	a->max_durability = 100.0f;
+	a->durability = 100.0f;
+	a->alive = 1;
+	a->damage_flash = 0.0f;
+
 	a->maxthrust = maxthrust;
 	a->manoeverability = manoeverability;
 	a->RollRate = RollRate;
@@ -82,16 +82,10 @@ void set_model(Aircraft* a, float maxthrust, float manoeverability, float RollRa
 	a->maxtheta = maxtheta;
 	a->inertia = inertia;
 	a->deadweight = deadweight;
-	a->StaticDrag = StaticDrag;
 	a->StallSpeed = StallSpeed;
 	a->DiveSpeedLimit1 = DiveSpeedLimit1;
 	a->DiveSpeedStructuralLimit = DiveSpeedStructuralLimit;
 	a->SeaLevelSpeedLimitThreshold = SeaLevelSpeedLimitThreshold;
-	a->CompressibilitySpeed = CompressibilitySpeed;
-	a->CompressibilitySpeedWithSpeedBrakes = CompressibilitySpeedWithSpeedBrakes;
-	a->MaxFullPowerAltRatio = MaxFullPowerAltRatio;
-	a->ServiceCeilingAltitude = ServiceCeilingAltitude;
-	a->FlapSpeed = FlapSpeed;
 	a->SpeedBrakePower;
 }
 void get_basis(const Aircraft* a, Vec3* fwd, Vec3* right, Vec3* up) {
@@ -125,10 +119,8 @@ void get_euler(const Aircraft* a, float* gamma, float* theta, float* phi) {
 }
 
 void aircraft_update(Aircraft* a, const AircraftInput* in) {
-
-	//printf(">>> update_aircraft chamado\n");
 	if (!a || !in) { printf(">>> a ou in NULL\n"); return; }
-	//printf(">>> in->thrust=%.3f timefac=%.3f\n", in->thrust, in->timefac);
+
 	Vec3 vaxis, raxis, uaxis;
 	Quaternion dq_pitch, dq_yaw, dq_roll, dq;
 	float timefac, elevator, aileron, rudder;
@@ -182,9 +174,17 @@ void aircraft_update(Aircraft* a, const AircraftInput* in) {
 	P_rad = elevator * a->manoeverability * (3.33f + 8.0f * a->realspeed) * timefac * D2R;
 	Y_rad = -rudder * a->manoeverability * (0.66f + 2.0f * a->realspeed) * timefac * D2R;
 	R_rad = -aileron * a->RollRate * (1.0f + a->realspeed) * timefac * 3.5f * D2R;
+	{
+		float pitch_offset = a->gamma - 180.0f;
+		float stability_k = 0.0010f;
+
+		P_rad -= pitch_offset * stability_k;
+	}
+
+
 
 	{
-		const float inertia_factor = 0.88;
+		const float inertia_factor = 0.88f;
 		const float inertia_yaw = 0.90f;
 		const float inertia_roll = 0.78f;
 
@@ -198,28 +198,33 @@ void aircraft_update(Aircraft* a, const AircraftInput* in) {
 	}
 
 	
+
+
 	float gamma_hi = 180.0f + a->maxgamma;
 	float gamma_lo = 180.0f - a->maxgamma;
 	float soft_zone = 12.0f;
 	float spring_k = 0.002f;
-	float damping = 0.4f;
-
-	if (a->gamma > gamma_hi - soft_zone) {
-		float x = (a->gamma - (gamma_hi - soft_zone)) / soft_zone;
-		if (x > 1.0f) x = 1.0f;
-		float spring_force = x * x * spring_k; // hooke's law
-		P_rad += spring_force;
-	}
-	else if (a->gamma < gamma_lo + soft_zone) {
+	
+	if (a->gamma < gamma_lo + soft_zone) {
 		float x = ((gamma_lo + soft_zone) - a->gamma) / soft_zone;
 		if (x > 1.0f) x = 1.0f;
-		float spring_force = x * x * spring_k;
-		P_rad += spring_force;
+		P_rad += x * x * spring_k;
 	}
+	else if (a->gamma > gamma_hi - soft_zone) {
+		float x = (a->gamma - (gamma_hi - soft_zone)) / soft_zone;
+		if (x > 1.0f) x = 1.0f;
+		P_rad -= x * x * spring_k;
+	}
+
 	new_gamma = a->gamma + P_rad * R2D;
-	if (new_gamma > gamma_hi) P_rad = (gamma_hi - a->gamma) * D2R;
-	if (new_gamma < gamma_lo) P_rad = (gamma_lo - a->gamma) * D2R;
-	
+	if (new_gamma < gamma_lo) {
+		new_gamma = gamma_lo;
+		a->angular_velocity.x *= 0.5f;
+	}
+	if (new_gamma > gamma_hi) {
+		new_gamma = gamma_hi;
+		a->angular_velocity.x *= 0.5f;
+	}
 	a->angular_velocity = (Vec3){ P_rad, Y_rad, R_rad };
 	dq_pitch = q_from_axangle((Vec3) { 1.0f, 0.0f, 0.0f }, P_rad);
 	dq_yaw = q_from_axangle((Vec3) { 0.0f, 1.0f, 0.0f }, Y_rad);
@@ -248,29 +253,62 @@ void aircraft_update(Aircraft* a, const AircraftInput* in) {
 	a->accz += a->thrust * uaxis.z * 0.067f * timefac;
 
 	a->accy -= a->thrust * uaxis.y * 0.067f * timefac * cosf(a->theta * D2R);
-	a->accy -= 0.015f * timefac;
-	a->accy -= a->deadweight * timefac;
-	a->accy -= sinf((a->gamma - 180.0f) * D2R) * (a->InertiallyDampenedPlayerSpeed / 0.8f);
 
-	a->accx -= sinf(a->phi * D2R) * a->realspeed;
-	a->accz -= cosf(a->phi * D2R) * a->realspeed;
+	float vfwd = dot(a->velocity, vaxis);
+	float vup = dot(a->velocity, uaxis);
+	float vlat = dot(a->velocity, raxis);
+
+	float speed = length(a->velocity);
+	if (speed < 0.01f) speed = 0.01f;
+
+	float aoa = 0.0f;
+	if (vfwd > 0.01f) {
+		aoa = atan2f(-vup, vfwd);
+	}
+	if (aoa > 0.45f) aoa = 0.45f;
+	if (aoa < -0.45f) aoa = -0.45f;
+
+	float CL = aoa * 4.5f;
+	if (CL > 1.3f) CL = 1.3f;
+	if (CL < -1.3f) CL = -1.3f;
+
+	float CD = 0.025f + CL * CL * 0.06f;
+
+	float q = 0.5f * a->InertiallyDampenedPlayerSpeed * a->InertiallyDampenedPlayerSpeed;
+
+	float lift = q * CL * 1.8f;
+	a->accx += -vaxis.x * vup / speed * 0 + lift * uaxis.x * 0;
+
+	a->accx += lift * uaxis.x;
+	a->accy += lift * uaxis.y;
+	a->accz += lift * uaxis.z;
+
+	float drag = q * CD * 1.8f;
+	Vec3 vdir = scale(a->velocity, 1.0f / speed);
+	a->accx -= vdir.x * drag;
+	a->accy -= vdir.y * drag;
+	a->accz -= vdir.z * drag;
+
+	a->accy -= 0.15f * timefac;
+
+
 
 	stepfac = 0.24f;
-	a->position.x += a->accx * timefac * stepfac;
-	a->position.z += a->accz * timefac * stepfac;
-	a->position.y += a->accy * timefac * stepfac;
+
+	a->velocity.x += a->accx * timefac;
+	a->velocity.y += a->accy * timefac;
+	a->velocity.z += a->accz * timefac;
+
+
+	a->position.x += a->velocity.x * timefac * stepfac;
+	a->position.z += a->velocity.z * timefac * stepfac;
+	a->position.y += a->velocity.y * timefac * stepfac;
 
 	scalef = 1.1f;
 	a->forcex = a->accx * stepfac * scalef;
 	a->forcey = a->accy * stepfac * scalef;
 	a->forcez = a->accz * stepfac * scalef;
 
-	gravityforce = sqrtf(a->realspeed) * vaxis.y * 1.10f * timefac;
-	a->forcez += gravityforce * vaxis.z;
-	a->forcex += gravityforce * vaxis.x;
-	a->forcey += gravityforce * vaxis.y;
-	
-	a->forcey -= gravityforce * vaxis.y * 2.2f;
 
 	{
 		float alt = a->position.y;
@@ -383,11 +421,37 @@ void aircraft_update(Aircraft* a, const AircraftInput* in) {
 	a->velocity.y = a->forcey;
 	a->velocity.z = a->forcez;
 
-	if (a->position.y < 5.0f) {
-		a->position.y = 5.0f;
-		if (a->accy < 0.0f) a->accy = 0.0f;
-		if (a->forcey < 0.0f) a->forcey = 0.0f;
-	}
 
 	(void)pitch_angle; 
+}
+void aircraft_respawn(Aircraft* air) {
+	if (!air) return;
+
+	air->position = air->spawn_position;
+	air->orientation = q_from_axangle((Vec3) { 0, 1, 0 }, air->spawn_yaw + PI);
+	air->velocity = zero();
+	air->angular_velocity = zero();
+	air->accx = air->accy = air->accz = 0.0f;
+	air->forcex = air->forcey = air->forcez = 0.0f;
+	air->thrust = 0.0f;
+	air->recthrust = 0.0f;
+	air->realspeed = 0.3f;
+
+	Vec3 basis_fwd, basis_rgt, basis_up;
+	get_basis(air, &basis_fwd, &basis_rgt, &basis_up);
+	air->velocity = scale(basis_fwd, 0.5f);
+
+	air->durability = air->max_durability;
+	air->alive = 1;
+	air->damage_flash = 0.0f;
+	air->respawn_timer = 0.0f;
+}
+void aircraft_apply_damage(Aircraft* a, float dmg) {
+	if (!a || !a->alive) return;
+	a->durability -= dmg;
+	a->damage_flash = 1.0f;
+	if (a->durability <= 0.0f) {
+		a->durability = 0.0f;
+		a->alive = 0;
+	}
 }

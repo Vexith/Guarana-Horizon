@@ -8,6 +8,7 @@ void input_init(AircraftInput* input) {
 	input->rudder = 0.0f;
 	input->ailerion = 0.0f;
 	input->thrust = 0.0f;
+	input->fire = 0;
 	input->timefac = 1.0f;
 }
 
@@ -16,6 +17,9 @@ void input_update(AircraftInput* input, const SDL_Event* event) {
 
 	if (event->type == SDL_EVENT_KEY_DOWN) {
 		switch (event->key.key) {
+		case SDLK_SPACE:
+			input->fire = 1;
+			break;
 		case SDLK_W:
 			input->elevator = -1.0f;
 			break;
@@ -23,10 +27,10 @@ void input_update(AircraftInput* input, const SDL_Event* event) {
 			input->elevator = 1.0f;
 			break;
 		case SDLK_A:
-			input->rudder = -1.0f;
+			input->rudder = 1.0f;
 			break;
 		case SDLK_D:
-			input->rudder = 1.0f;
+			input->rudder = -1.0f;
 			break;
 		case SDLK_E:
 			input->ailerion = -1.0f;
@@ -46,6 +50,9 @@ void input_update(AircraftInput* input, const SDL_Event* event) {
 	if (event->type == SDL_EVENT_KEY_UP) {
 		switch (event->key.key) {
 		case SDLK_W:
+		case SDLK_SPACE:
+			input->fire = 0;
+			break;
 		case SDLK_S:
 			input->elevator = 0.0f;
 			break;

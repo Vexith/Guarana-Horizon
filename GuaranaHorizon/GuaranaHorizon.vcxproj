@@ -146,6 +146,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="aircraft.c" />
+    <ClCompile Include="ai_bot.c" />
     <ClCompile Include="camera.c" />
     <ClCompile Include="input.c" />
     <ClCompile Include="main.c" />
@@ -153,18 +154,23 @@
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CompileAsC</CompileAs>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CompileAsC</CompileAs>
     </ClCompile>
+    <ClCompile Include="physics.c" />
     <ClCompile Include="quaternion.c" />
     <ClCompile Include="renderer.c" />
     <ClCompile Include="vector.c" />
+    <ClCompile Include="weapons.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="aircraft.h" />
+    <ClInclude Include="ai_bot.h" />
     <ClInclude Include="camera.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="model.h" />
+    <ClInclude Include="physics.h" />
     <ClInclude Include="quaternion.h" />
     <ClInclude Include="renderer.h" />
     <ClInclude Include="vector.h" />
+    <ClInclude Include="weapons.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
