@@ -1,5 +1,5 @@
 chip8:
-	gcc -Wall -Wextra -O2 GuaranaHorizon/*.c -o ghorizon `pkg-config --cflags --libs sdl3`
+	gcc -Wall -Wextra -O2 GuaranaHorizon/*.c -o ghorizon `pkg-config --cflags --libs sdl3` -lm
 clean:
 	rm -f ghorizon
 
