@@ -24,7 +24,7 @@ int main(void) {
 	const float dt = 1.0f / 60.0f;
 	
 	aircraft_init(&aircraft);
-	bot_spawnpoint(&aircraft, &bots);
+	bot_spawnpoint(&aircraft, bots);
 	
 	Model* m = load_obj(PLANE_FILE, 50.0f);
 	if (m) {

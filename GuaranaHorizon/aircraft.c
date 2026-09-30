@@ -2,6 +2,7 @@
 #include "quaternion.h"
 #include "vector.h"
 #include "input.h"
+#include <stdio.h>
 
 #include <string.h>
 

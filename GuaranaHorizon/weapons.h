@@ -2,6 +2,7 @@
 #define WEAPONS_H
 
 #include "aircraft.h"
+#include "camera.h"
 
 #define MAX_BULLETS 256
 #define BULLET_SPEED 4.0f
@@ -24,6 +25,6 @@ void weapons_init(BulletPool* pool);
 void fire(BulletPool* pool, const Aircraft* shooter, int party);
 void weapons_update(BulletPool* pool, float dt);
 void check_hits(BulletPool* pool, Aircraft** targets, int count, int* target_parties);
-void weapons_draw(const BulletPool* pool, const struct Camera* camera);
+void weapons_draw(const BulletPool* pool, const Camera* cam);
 
 #endif 

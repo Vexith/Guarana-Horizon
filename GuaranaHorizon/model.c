@@ -65,10 +65,10 @@ Model* load_obj(const char* path, float target_length) {
 	if (!path || !target_length) return NULL;
 	printf("[model] trying to open: %s\n", path);
 
-	FILE* f = NULL;
-	errno_t err = fopen_s(&f, path, "r");
-	if (err != 0 || f == NULL) {
-		printf("[model] FATAL ERROR: %d", (int)err);
+	
+	FILE* f = fopen(path, "r");
+	if (f == NULL) {
+		printf("[model] FATAL ERROR loading the model\n");
 		return NULL;
 	}
 	printf("[model] file open\n");
